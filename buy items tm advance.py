@@ -15,13 +15,15 @@ needpercent = 2
 # минимальная цена для покупки предметов указывается в рублях
 minprice = 0
 
+# юзаем прокси для того что бы нам не давали маслину и прога не вставала по обновлению цен в стиме
+proxylist = {}
 
 # appid игры
 appid = "578080"
 # какой сайт нужно использовать
 mainlink = 'https://market.pubg.com'
 #получается на сайте https://market.pubg.com/docs/ в разделе "API ключ"
-secretKey = 'd7XhLKFC2nbZLZvYs7o396IldXwz2vg'
+secretKey = 'secret-key'
 
 #dont need for basic user
 take_count = 100
@@ -54,6 +56,23 @@ def parse_all_names(now):
 def get_clear_price(price):
     return float(price[0:price.find(' ')].replace(',', '.'))
 
+def get_proxy():
+    global proxylist
+
+    page = requests.get('https://free-proxy-list.net/anonymous-proxy.html').text
+    soup = BeautifulSoup(page, 'html.parser')
+    tempnames = soup.find_all('table', id='proxylisttable')[0].find_all('tbody')[0]
+
+    for element in tempnames:
+        all = element.find_all('td')
+        ip = all[0].get_text()
+        port = all[1].get_text()
+        https = all[6].get_text()
+
+        if https == 'yes':
+            proxylist.update({'http://%s:%s' % (ip, port):True})
+
+
 def get_steam_price(name):
     name = name.strip()
     nameq = urllib.parse.quote(name)
@@ -61,6 +80,13 @@ def get_steam_price(name):
     url = 'http://steamcommunity.com/market/priceoverview/?country=US&currency=5&appid=578080&market_hash_name=%s'%nameq
 
     myreq = json.loads( requests.get(url).text )
+
+    proxy = list(proxylist.keys())
+
+    id = 0
+    while myreq == None and id < len(proxy):
+        myreq = json.loads(requests.get(url, proxies={'https':proxy[id]}).text)
+        id += 1
 
     print(myreq)
 
@@ -91,7 +117,7 @@ def get_steam_price(name):
     # if update_list.count(name)>0:
     #     update_list.remove(update_list.index(name))
 
-    if price <= price_for_update:
+    if price <= price_for_update and price > minprice:
         print('has been added to the update list! up ^')
         update_list.append(name)
 
@@ -104,6 +130,8 @@ def get_update():
     global update_list
     count = len(update_list)
 
+    proxy = list(proxylist.values())
+
     for a in range(count):
         name = update_list.pop(0)
 
@@ -113,6 +141,11 @@ def get_update():
         url = 'http://steamcommunity.com/market/priceoverview/?country=US&currency=5&appid=578080&market_hash_name=%s' % nameq
 
         myreq = json.loads(requests.get(url).text)
+
+        id = 0
+        while myreq == None and id < len(proxy):
+            myreq = json.loads(requests.get(url, proxies={'https':proxy[id]}).text)
+            id += 1
 
         low = myreq.get('lowest_price')
         median = myreq.get('median_price')
@@ -177,11 +210,9 @@ def get_check():
                                 '==================================== BOUGHT ====================================')
                             print(buyit)
                             print('Sell your item - %s for %sp. in steam market.' % (name, (float(element[2]) / 100) * needpercent))
-
+                        else:
+                            print('im sorry but you have not enough money for bying this item - %s:%f' % (name, price))
                         time.sleep(0.25)
-
-                print('im sorry but you have not enough money for bying this item - %s:%f'%(name,price))
-
 
     #time.sleep(1)
 
@@ -190,6 +221,8 @@ def main():
     total = 1
     now = 0
     names = []
+
+    get_proxy()
 
     while now <= total:
         returned, total = parse_all_names(now)
@@ -215,6 +248,8 @@ def main():
             update = True
 
             threading.Thread(target=get_update).start()
+            threading.Thread(target=get_proxy).start()
+
             last_time = time.time()
 
         # в любом случае запустить это
