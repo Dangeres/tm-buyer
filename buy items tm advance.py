@@ -9,11 +9,11 @@ import json
 # цена, ниже которой тебе необходимо вносить предмет в список частообновляемых
 price_for_update = 100
 # каждые сколько минут обновлять итемы которые имеют цену ниже цены указанной выше
-minutes_for_update = 10
+minutes_for_update = 15
 # процент для покупки расчитывается : steam/tm без учета процентов!
 needpercent = 2
 # минимальная цена для покупки предметов указывается в рублях
-minprice = 0
+minprice = 10
 
 # юзаем прокси для того что бы нам не давали маслину и прога не вставала по обновлению цен в стиме
 proxylist = {}
@@ -59,6 +59,11 @@ def get_clear_price(price):
 def get_proxy():
     global proxylist
 
+    for element in list(proxylist.keys()):
+        if not proxylist[element]:
+            print('%s has been deleted because its useless.'%element)
+            proxylist.pop(element)
+
     page = requests.get('https://free-proxy-list.net/anonymous-proxy.html').text
     soup = BeautifulSoup(page, 'html.parser')
     tempnames = soup.find_all('table', id='proxylisttable')[0].find_all('tbody')[0]
@@ -72,21 +77,28 @@ def get_proxy():
         if https == 'yes':
             proxylist.update({'http://%s:%s' % (ip, port):True})
 
-
 def get_steam_price(name):
     name = name.strip()
     nameq = urllib.parse.quote(name)
 
     url = 'http://steamcommunity.com/market/priceoverview/?country=US&currency=5&appid=578080&market_hash_name=%s'%nameq
 
-    myreq = json.loads( requests.get(url).text )
+    try:
+        myreq = json.loads( requests.get(url).text )
+    except:
+        myreq = None
 
     proxy = list(proxylist.keys())
 
-    id = 0
+    id = -1
     while myreq == None and id < len(proxy):
-        myreq = json.loads(requests.get(url, proxies={'https':proxy[id]}).text)
+        print(proxy[id])
         id += 1
+        try:
+            myreq = json.loads(requests.get(url, proxies={'http':proxy[id]}).text)
+        except:
+            proxylist[proxy[id]] = False
+            pass
 
     print(myreq)
 
@@ -130,7 +142,9 @@ def get_update():
     global update_list
     count = len(update_list)
 
-    proxy = list(proxylist.values())
+    proxy = list(proxylist.keys())
+
+    print(proxy)
 
     for a in range(count):
         name = update_list.pop(0)
@@ -140,43 +154,54 @@ def get_update():
 
         url = 'http://steamcommunity.com/market/priceoverview/?country=US&currency=5&appid=578080&market_hash_name=%s' % nameq
 
-        myreq = json.loads(requests.get(url).text)
+        try:
+            myreq = json.loads(requests.get(url).text)
+        except:
+            pass
 
-        id = 0
+        id = -1
         while myreq == None and id < len(proxy):
-            myreq = json.loads(requests.get(url, proxies={'https':proxy[id]}).text)
+            print(proxy[id])
             id += 1
+            try:
+                myreq = json.loads(requests.get(url, proxies={'http':proxy[id]}).text)
+            except:
+                proxylist[proxy[id]] = False
+                pass
 
-        low = myreq.get('lowest_price')
-        median = myreq.get('median_price')
+        if myreq != None:
+            low = myreq.get('lowest_price')
+            median = myreq.get('median_price')
 
-        if low == None:
-            low = median
+            if low == None:
+                low = median
 
-        if median == None:
-            median = low
+            if median == None:
+                median = low
 
-        if low != None and median != None:
+            if low != None and median != None:
 
-            low = get_clear_price(low)
-            median = get_clear_price(median)
+                low = get_clear_price(low)
+                median = get_clear_price(median)
 
-            price = (low + median) / 2
+                price = (low + median) / 2
 
-            price = (price + all_items[name])/2
+                price = (price + all_items[name])/2
 
-            all_items[name] = price
+                all_items[name] = price
 
-            if price <= price_for_update:
-                update_list.append(name)
+                if price <= price_for_update:
+                    update_list.append(name)
 
-            print('has been updated v')
-            print(name, all_items[name])
+                print('has been updated v')
+                print(name, all_items[name])
 
+            del low, median
         time.sleep(random.uniform(4, 5.5))
 
-        del nameq, low, median, url, myreq, name
+        del nameq, url, myreq, name
 
+    print(time.strftime('%H:%M:%S', time.localtime(time.time())))
     global update
     update = False
 
@@ -247,8 +272,8 @@ def main():
 
             update = True
 
-            threading.Thread(target=get_update).start()
             threading.Thread(target=get_proxy).start()
+            threading.Thread(target=get_update).start()
 
             last_time = time.time()
 
