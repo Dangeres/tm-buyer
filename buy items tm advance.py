@@ -157,6 +157,7 @@ def get_update():
         try:
             myreq = json.loads(requests.get(url).text)
         except:
+            myreq = None
             pass
 
         id = -1
