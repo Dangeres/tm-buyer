@@ -59,10 +59,10 @@ def get_clear_price(price):
 def get_proxy():
     global proxylist
 
-    for element in list(proxylist.keys()):
-        if not proxylist[element]:
-            print('%s has been deleted because its useless.'%element)
-            proxylist.pop(element)
+    #for element in list(proxylist.keys()):
+    #    if not proxylist[element]:
+    #        print('%s has been deleted because its useless.'%element)
+    #        proxylist.pop(element)
 
     page = requests.get('https://free-proxy-list.net/anonymous-proxy.html').text
     soup = BeautifulSoup(page, 'html.parser')
